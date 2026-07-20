@@ -1,0 +1,30 @@
+rules_version = '2';
+
+// The People of India - Storage Security Rules
+// Media (images AND video) uploaded by signed-in, non-blocked users into
+// their own folder. Everyone can read (media is embedded in public posts).
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    match /uploads/{userId}/{fileName} {
+      // Public read - post media must render for guests too.
+      allow read: if true;
+
+      // Write: own folder only, image or video, max 100 MB, and not on the
+      // Firestore blocklist (cross-service rules check).
+      allow write: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.size < 100 * 1024 * 1024
+        && (
+          request.resource.contentType.matches('image/.*')
+          || request.resource.contentType.matches('video/.*')
+        )
+        && !firestore.exists(/databases/(default)/documents/blocked/$(request.auth.token.email));
+    }
+
+    // Everything else: locked down.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "tpi-admin-scripts",
+  "private": true,
+  "description": "Admin SDK scripts for The People of India (run locally, never deployed)",
+  "dependencies": {
+    "firebase": "^12.16.0",
+    "firebase-admin": "^13.1.0"
+  }
+}

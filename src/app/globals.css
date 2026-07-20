@@ -1,0 +1,218 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ------------------------------------------------------------------ themes
+   Light (warm newsprint) is the default identity; dark is a midnight-blue
+   variant. Every color in the app resolves through these variables. */
+:root,
+html.light {
+  color-scheme: light;
+  --bg: 250 248 243;     /* warm newsprint, not clinical white */
+  --bg-2: 255 255 255;
+  --bg-3: 240 236 228;
+  --fg: 26 24 21;
+  --fg-dim: 92 86 76;
+  --fg-faint: 145 138 126;
+  --line: rgba(30, 22, 8, 0.1);
+  --line-strong: rgba(30, 22, 8, 0.24);
+  --elevate: rgba(30, 22, 8, 0.05);
+  --shadow-card: 0 1px 2px rgba(30, 22, 8, 0.05), 0 8px 30px rgba(30, 22, 8, 0.08);
+  --glass-bg: rgba(250, 248, 243, 0.78);
+}
+
+html.dark {
+  color-scheme: dark;
+  --bg: 9 11 17;         /* near-black with a breath of midnight blue */
+  --bg-2: 15 18 26;
+  --bg-3: 22 26 36;
+  --fg: 244 241 234;     /* warm off-white */
+  --fg-dim: 183 180 172;
+  --fg-faint: 112 110 104;
+  --line: rgba(210, 225, 255, 0.09);
+  --line-strong: rgba(210, 225, 255, 0.22);
+  --elevate: rgba(210, 225, 255, 0.06);
+  --shadow-card: 0 1px 0 0 rgba(210, 225, 255, 0.04) inset,
+    0 8px 30px rgba(0, 0, 5, 0.4);
+  --glass-bg: rgba(15, 18, 26, 0.72);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-ink text-paper font-body antialiased;
+  text-rendering: optimizeLegibility;
+  transition: background-color 0.35s ease, color 0.35s ease;
+}
+
+::selection {
+  background: rgba(232, 135, 58, 0.35);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+/* ---------- Faint gradient mesh used behind the hero ---------- */
+.gradient-mesh {
+  background:
+    radial-gradient(ellipse 60% 50% at 20% 10%, rgba(232, 135, 58, 0.09), transparent 60%),
+    radial-gradient(ellipse 50% 40% at 80% 20%, rgba(120, 90, 200, 0.07), transparent 60%),
+    radial-gradient(ellipse 70% 60% at 50% 90%, rgba(232, 135, 58, 0.06), transparent 60%);
+}
+html.light .gradient-mesh {
+  background:
+    radial-gradient(ellipse 60% 50% at 20% 10%, rgba(232, 135, 58, 0.14), transparent 60%),
+    radial-gradient(ellipse 50% 40% at 80% 20%, rgba(120, 90, 200, 0.08), transparent 60%),
+    radial-gradient(ellipse 70% 60% at 50% 90%, rgba(232, 135, 58, 0.1), transparent 60%);
+}
+
+/* Radial vignette that fades the mesh into the page background */
+.hero-vignette {
+  background: radial-gradient(
+    ellipse 80% 60% at 50% 40%,
+    transparent,
+    rgb(var(--bg)) 95%
+  );
+}
+
+/* ---------- Soft halo behind the hero headline ---------- */
+.headline-halo {
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 50% 50% at 50% 50%,
+    rgba(232, 135, 58, 0.1),
+    rgba(232, 135, 58, 0.04) 45%,
+    transparent 70%
+  );
+  filter: blur(2px);
+}
+html.dark .headline-halo {
+  background: radial-gradient(
+    ellipse 50% 50% at 50% 50%,
+    rgba(232, 135, 58, 0.12),
+    rgba(120, 90, 200, 0.05) 50%,
+    transparent 72%
+  );
+}
+
+/* ---------- Site-wide soft gradient wash (fixed, behind everything) ---------- */
+.page-wash {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 90% 55% at 50% -10%, rgba(232, 135, 58, 0.06), transparent 60%),
+    linear-gradient(180deg, rgba(232, 135, 58, 0.025), transparent 40%);
+}
+html.dark .page-wash {
+  background:
+    radial-gradient(ellipse 90% 55% at 50% -10%, rgba(232, 135, 58, 0.05), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 85% 110%, rgba(80, 110, 200, 0.05), transparent 60%);
+}
+
+/* ---------- Glassy surface ---------- */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  border: 1px solid var(--line);
+}
+
+/* ---------- The emblem, tinted to the current text color via mask ---------- */
+.emblem {
+  display: inline-block;
+  background-color: currentColor;
+  mask: url("/emblem.svg") no-repeat center / contain;
+  -webkit-mask: url("/emblem.svg") no-repeat center / contain;
+}
+
+/* ---------- Rendered article body (Tiptap output) ---------- */
+.prose-tpi {
+  @apply text-paper/90 leading-relaxed;
+  font-size: 1.075rem;
+}
+.prose-tpi > * + * {
+  margin-top: 1.1em;
+}
+.prose-tpi h1,
+.prose-tpi h2,
+.prose-tpi h3 {
+  @apply font-display text-paper;
+  line-height: 1.2;
+  margin-top: 1.6em;
+}
+.prose-tpi h1 { font-size: 1.9rem; }
+.prose-tpi h2 { font-size: 1.5rem; }
+.prose-tpi h3 { font-size: 1.25rem; }
+.prose-tpi a {
+  @apply text-saffron underline underline-offset-4 decoration-saffron/40 hover:decoration-saffron;
+}
+.prose-tpi blockquote {
+  @apply border-l-2 border-saffron/60 pl-5 italic text-paper-dim;
+}
+.prose-tpi ul { @apply list-disc pl-6; }
+.prose-tpi ol { @apply list-decimal pl-6; }
+.prose-tpi img,
+.prose-tpi video {
+  @apply rounded-xl w-full my-6 shadow-card;
+}
+.prose-tpi audio {
+  @apply w-full my-6;
+}
+.prose-tpi iframe {
+  @apply rounded-xl w-full my-6 aspect-video;
+}
+.prose-tpi code {
+  @apply bg-ink-3 rounded px-1.5 py-0.5 text-[0.9em];
+}
+.prose-tpi hr {
+  @apply border-line my-8;
+}
+
+/* ---------- Tiptap editor chrome ---------- */
+.tiptap {
+  outline: none;
+  min-height: 40vh;
+}
+.tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  @apply text-paper-faint;
+}
+.tiptap img.ProseMirror-selectednode,
+.tiptap video.ProseMirror-selectednode {
+  outline: 2px solid rgba(232, 135, 58, 0.7);
+  outline-offset: 2px;
+}
+
+/* Inline media placeholder shimmer while an upload lands */
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.upload-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgb(var(--bg-2)) 25%,
+    rgb(var(--bg-3)) 50%,
+    rgb(var(--bg-2)) 75%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.4s infinite linear;
+}
+
+/* ---------- Slow drift for hero floating cards ---------- */
+@keyframes drift {
+  0%, 100% { transform: translateY(0) rotate(var(--tilt, 0deg)); }
+  50% { transform: translateY(-14px) rotate(var(--tilt, 0deg)); }
+}
+.drift {
+  animation: drift 7s ease-in-out infinite;
+}

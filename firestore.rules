@@ -1,0 +1,217 @@
+rules_version = '2';
+
+// The People of India - Firestore Security Rules
+//
+// Enforcement model (server-side, never trust the client):
+//   - Guests: read-only, and only 'live' posts.
+//   - Signed-in, non-blocked users: create By-the-People posts, comments,
+//     reactions; may only touch counter fields on posts/comments.
+//   - admin:true custom claim: full authority - For-the-People writes,
+//     hide/restore, delete anything, blocklist, reports.
+//   - Auto-hide transition (live -> hidden) is validated here too: it is only
+//     legal on a 'by' post whose new counters cross the community threshold
+//     (>= 15 total reactions AND >= 70% disagrees).
+//
+// NOTE on rate limiting: Firestore rules cannot throttle write frequency.
+// If abuse appears, add a Cloud Function (or App Check + per-uid counters)
+// as a server-side rate limiter. Deliberately left out of v1.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn() && request.auth.token.admin == true;
+    }
+
+    // Blocked users are keyed by email in /blocked/{email}.
+    function notBlocked() {
+      return signedIn()
+        && !exists(/databases/$(database)/documents/blocked/$(request.auth.token.email));
+    }
+
+    function canParticipate() {
+      return signedIn() && notBlocked();
+    }
+
+    // ---------------------------------------------------------------- posts
+    match /posts/{postId} {
+
+      // Anyone (including guests) can read live posts; only admins see hidden.
+      allow read: if resource.data.status == 'live' || isAdmin();
+
+      // Create:
+      //  - Admins create For-the-People (or anything).
+      //  - Non-blocked users create By-the-People under their own identity,
+      //    status 'live', with zeroed counters.
+      allow create: if isAdmin()
+        || (
+          canParticipate()
+          && request.resource.data.zone == 'by'
+          && request.resource.data.status == 'live'
+          && request.resource.data.authorId == request.auth.uid
+          && request.resource.data.authorEmail == request.auth.token.email
+          && request.resource.data.hearts == 0
+          && request.resource.data.disagrees == 0
+          && request.resource.data.commentCount == 0
+          && request.resource.data.title is string
+          && request.resource.data.title.size() > 0
+          && request.resource.data.title.size() <= 200
+          && request.resource.data.content is string
+        );
+
+      // Update:
+      //  - Admins: anything (edit editorial, hide/restore, etc.).
+      //  - Everyone else: only the reaction/comment counters - and the single
+      //    legal status transition: community auto-hide on 'by' posts.
+      allow update: if isAdmin() || (canParticipate() && legalCounterUpdate());
+
+      // Delete: admin only. Absolute override; users cannot even delete
+      // their own posts (accountability - retraction goes through admins).
+      allow delete: if isAdmin();
+
+      function affectedKeys() {
+        return request.resource.data.diff(resource.data).affectedKeys();
+      }
+
+      function heartsDelta() {
+        return request.resource.data.hearts - resource.data.hearts;
+      }
+
+      function disagreesDelta() {
+        return request.resource.data.disagrees - resource.data.disagrees;
+      }
+
+      function newTotal() {
+        return request.resource.data.hearts + request.resource.data.disagrees;
+      }
+
+      // The only status change a non-admin write may carry: live -> hidden,
+      // on a By-the-People post, when the new counters cross the threshold
+      // (total >= 15 AND disagrees/total >= 0.7, expressed integer-safely).
+      function legalAutoHide() {
+        return resource.data.zone == 'by'
+          && resource.data.status == 'live'
+          && request.resource.data.status == 'hidden'
+          && request.resource.data.autoHidden == true
+          && newTotal() >= 15
+          && request.resource.data.disagrees * 10 >= newTotal() * 7;
+      }
+
+      function legalCounterUpdate() {
+        return (
+          // Reaction write: hearts/disagrees move by at most 1 each
+          // (toggle = ±1 on one, switch = ±1 on both), optional auto-hide.
+          affectedKeys().hasOnly(['hearts', 'disagrees', 'status', 'autoHidden'])
+          && heartsDelta() >= -1 && heartsDelta() <= 1
+          && disagreesDelta() >= -1 && disagreesDelta() <= 1
+          && request.resource.data.hearts >= 0
+          && request.resource.data.disagrees >= 0
+          && (
+            !affectedKeys().hasAny(['status', 'autoHidden']) || legalAutoHide()
+          )
+        ) || (
+          // Comment counter bump when a comment is created on a 'by' post.
+          affectedKeys().hasOnly(['commentCount'])
+          && resource.data.zone == 'by'
+          && request.resource.data.commentCount == resource.data.commentCount + 1
+        );
+      }
+
+      // ---------------------------------------------------- post reactions
+      // One doc per user: posts/{postId}/reactions/{uid}, {type, uid}.
+      match /reactions/{userId} {
+        allow read: if signedIn();
+        allow write: if isAdmin()
+          || (
+            canParticipate()
+            && userId == request.auth.uid
+            && (
+              request.method == 'delete'
+              || request.resource.data.type in ['heart', 'disagree']
+            )
+          );
+      }
+
+      // --------------------------------------------------------- comments
+      // Comments exist only on By-the-People posts.
+      match /comments/{commentId} {
+        allow read: if true;
+
+        allow create: if canParticipate()
+          && get(/databases/$(database)/documents/posts/$(postId)).data.zone == 'by'
+          && request.resource.data.authorId == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 3000
+          && request.resource.data.hearts == 0
+          && request.resource.data.disagrees == 0;
+
+        // Non-admin updates: reaction counters only.
+        allow update: if isAdmin()
+          || (
+            canParticipate()
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['hearts', 'disagrees'])
+            && request.resource.data.hearts >= 0
+            && request.resource.data.disagrees >= 0
+            && (request.resource.data.hearts - resource.data.hearts) >= -1
+            && (request.resource.data.hearts - resource.data.hearts) <= 1
+            && (request.resource.data.disagrees - resource.data.disagrees) >= -1
+            && (request.resource.data.disagrees - resource.data.disagrees) <= 1
+          );
+
+        // Authors may delete their own comment; admins anything.
+        allow delete: if isAdmin()
+          || (signedIn() && resource.data.authorId == request.auth.uid);
+
+        // ---------------------------------------------- comment reactions
+        match /reactions/{userId} {
+          allow read: if signedIn();
+          allow write: if isAdmin()
+            || (
+              canParticipate()
+              && userId == request.auth.uid
+              && (
+                request.method == 'delete'
+                || request.resource.data.type in ['heart', 'disagree']
+              )
+            );
+        }
+      }
+    }
+
+    // -------------------------------------------------------------- reports
+    // Fed by the Report button; readable/manageable by admins only.
+    match /reports/{reportId} {
+      allow create: if canParticipate()
+        && request.resource.data.reporterId == request.auth.uid
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() > 0
+        && request.resource.data.reason.size() <= 1000;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // -------------------------------------------------------------- blocked
+    // Doc ID = email. Existence of the doc is the block.
+    match /blocked/{email} {
+      // A user may check their own entry; admins list everything.
+      allow get: if isAdmin() || (signedIn() && request.auth.token.email == email);
+      allow list: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ---------------------------------------------------------------- users
+    // Lightweight profiles, upserted at sign-in. Admin-readable.
+    match /users/{userId} {
+      allow read: if isAdmin();
+      allow create, update: if signedIn()
+        && userId == request.auth.uid
+        && request.resource.data.email == request.auth.token.email;
+      allow delete: if isAdmin();
+    }
+  }
+}
