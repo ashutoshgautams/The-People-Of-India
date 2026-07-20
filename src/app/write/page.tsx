@@ -81,7 +81,11 @@ export default function WritePage() {
       <div className="flex min-h-[70vh] items-center justify-center px-5 text-center">
         <p className="max-w-sm text-sm text-paper-dim">
           Your account has been blocked from publishing. If you believe this is
-          a mistake, see our <a href="/guidelines" className="text-saffron underline">guidelines</a>.
+          a mistake, see our <a href="/guidelines" className="text-saffron underline">guidelines</a>{" "}
+          or write to{" "}
+          <a href="mailto:support@thepeopleofindia.org" className="text-saffron underline">
+            support@thepeopleofindia.org
+          </a>.
         </p>
       </div>
     );
